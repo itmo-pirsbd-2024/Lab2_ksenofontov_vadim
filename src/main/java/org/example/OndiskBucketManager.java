@@ -108,9 +108,9 @@ public class OndiskBucketManager implements IBucketManager {
 
     public long cachePriorityQueueTimeDelta = 0;
 
-    OndiskBucketManager(String _pathToFile) throws IOException {
+    OndiskBucketManager(String _pathToFile, int _maxBucketsInCache) throws IOException {
         fileObject = new RandomAccessFile(_pathToFile, "rw");
-        cache = new BucketCache(this, 2);
+        cache = new BucketCache(this, _maxBucketsInCache);
     }
 
     byte[] serializeBucket(Bucket bucket) {

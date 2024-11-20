@@ -1,7 +1,7 @@
 package org.example;
 
 public class FractionalHasher implements IHasher {
-    double A = 0.66667;
+    double A = 0.0000066667;
     int maxHash = Integer.MAX_VALUE;
 
     public int generateHash(long value) {
