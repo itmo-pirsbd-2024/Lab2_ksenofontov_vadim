@@ -1,191 +1,731 @@
 package org.example;
 
 
-import java.util.ArrayDeque;
-import java.util.Stack;
+import java.io.*;
+import java.nio.ByteBuffer;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
-import static java.lang.Thread.sleep;
-import static java.util.Arrays.sort;
+import static java.util.Collections.sort;
+import java.util.*;
+
 
 public class Main {
+    // ------------------------------------------------------
+    static void shuffleArray(long[] ar, long seed) {
+        Random rnd = new Random();
+        rnd.setSeed(seed);
+        for (int i = ar.length - 1; i > 0; i--) {
+            int index = rnd.nextInt(i + 1);
 
-    public static int[] generateArray(int numberOfElements) {
-        var random = ThreadLocalRandom.current();
-        return IntStream.generate(() -> random.nextInt(numberOfElements * 5)).limit(numberOfElements).toArray();
+            long a = ar[index];
+            ar[index] = ar[i];
+            ar[i] = a;
+        }
     }
 
-    //--------------------------------------------------------------------------------
-    public static void bubbleSort(int[] arr) {
-        for (int i = 0; i < arr.length - 1; i++) {
-            for (int j = 1; j < (arr.length); j++) {
-                if (arr[j - 1] > arr[j]){
-                    int temp = arr[j - 1];
-                    arr[j - 1] = arr[j];
-                    arr[j] = temp;
+    // ------------------------------------------------------
+    // Generate shuffle of random sequence
+    static void generateShuffleOfRandomSequence() {
+        var NUMBER_OF_ELEMENTS = 25;
+        var NUMBER_OF_ELEMENTS_FOR_ONE_SEED = 5;
+        // NUMBER_OF_ELEMENTS % NUMBER_OF_ELEMENTS_FOR_ONE_SEED should be 0
+
+        Random random = new Random();
+        random.setSeed(0);
+        var seeds = LongStream.generate(() -> random.nextLong(Long.MAX_VALUE)).limit((NUMBER_OF_ELEMENTS + NUMBER_OF_ELEMENTS_FOR_ONE_SEED - 1)/ NUMBER_OF_ELEMENTS_FOR_ONE_SEED).toArray();
+
+        for (int i = 0; i < seeds.length; i++)
+        {
+            System.out.print(seeds[i] + " ");
+        }
+        System.out.println();
+
+        for (int i = 0; i < NUMBER_OF_ELEMENTS; i++)
+        {
+            if (i % NUMBER_OF_ELEMENTS_FOR_ONE_SEED == 0) {
+                random.setSeed(seeds[i / NUMBER_OF_ELEMENTS_FOR_ONE_SEED]);
+                System.out.print(" | ");
+            }
+
+            var val = random.nextLong(100);
+
+            System.out.print(val + " ");
+        }
+        System.out.println();
+
+        shuffleArray(seeds, 4);
+
+        for (int i = 0; i < seeds.length; i++)
+        {
+            System.out.print(seeds[i] + " ");
+        }
+        System.out.println();
+
+        long[] valuesForCurrentSeed = new long[NUMBER_OF_ELEMENTS_FOR_ONE_SEED];
+        int indexCounter = 0;
+        for (int i = 0; i < NUMBER_OF_ELEMENTS; i++)
+        {
+            if (i % NUMBER_OF_ELEMENTS_FOR_ONE_SEED == 0) {
+                random.setSeed(seeds[i / NUMBER_OF_ELEMENTS_FOR_ONE_SEED]);
+                System.out.print(" | ");
+                valuesForCurrentSeed = LongStream.generate(() -> random.nextLong(100)).limit(NUMBER_OF_ELEMENTS_FOR_ONE_SEED).toArray();
+                shuffleArray(valuesForCurrentSeed, i);
+                indexCounter = 0;
+            }
+
+            var val = valuesForCurrentSeed[indexCounter++];
+
+            System.out.print(val + " ");
+        }
+        System.out.println();
+    }
+
+    // Write numbers on disk -> read numbers from disk
+    static void diskWriteReadOfNumbers() throws IOException {
+        RandomAccessFile fileObject = new RandomAccessFile("file.bin", "rw");
+
+        Random random = new Random();
+        random.setSeed(0);
+
+        var NUMBER_OF_ELEMENTS_IN_ITERATION = 2_000_000;
+        var NUMBER_OF_ITERATIONS = 100;
+        var array = LongStream.generate(() -> random.nextLong(100_000 * 5L)).limit(NUMBER_OF_ELEMENTS_IN_ITERATION).toArray();
+        long timeDelta = 0;
+        long start = 0;
+        long end = 0;
+        long sum = 0;
+
+        byte[] bytes = new byte[NUMBER_OF_ELEMENTS_IN_ITERATION * 8];
+
+        var buffer = ByteBuffer.wrap(bytes).asLongBuffer();
+
+        for (int i = 0; i < NUMBER_OF_ELEMENTS_IN_ITERATION; i++) {
+            buffer.put(array[i]);
+        }
+
+        start = System.nanoTime();
+
+        for (int i = 0; i < NUMBER_OF_ITERATIONS; i++) {
+            fileObject.write(bytes);
+
+            int index1 = random.nextInt(NUMBER_OF_ELEMENTS_IN_ITERATION * 8);
+            int index2 = random.nextInt(NUMBER_OF_ELEMENTS_IN_ITERATION * 8);
+
+            byte a = bytes[index1];
+            bytes[index1] = bytes[index2];
+            bytes[index2] = a;
+        }
+
+        end = System.nanoTime();
+        timeDelta = (end - start);
+
+        System.out.println ("Batch Write time delta: " + (timeDelta) / 1_000_000 + " ms, " + NUMBER_OF_ELEMENTS_IN_ITERATION * 8L * NUMBER_OF_ITERATIONS / 1024 +
+                " Kb, Speed: " + NUMBER_OF_ELEMENTS_IN_ITERATION * 8L * NUMBER_OF_ITERATIONS / ((timeDelta) / 1000 ) + "Mb/s");
+
+        /*fileObject.setLength(0);
+
+        start = System.nanoTime();
+
+        for (int i = 0; i < NUMBER_OF_ELEMENTS; i++) {
+            fileObject.writeLong(array[i]);
+        }
+
+        end = System.nanoTime();
+        timeDelta = (end - start);
+
+        System.out.println ("Seq Write Time Difference: " + (timeDelta) / 1_000_000 + " ms, " + NUMBER_OF_ELEMENTS * 8 / 1024 +
+                " Kb, Speed: " + NUMBER_OF_ELEMENTS * 8 / ((timeDelta) / 1000 ) + "Mb/s");
+
+         */
+
+        fileObject.seek(0);
+
+        start = System.nanoTime();
+
+        for (int i = 0; i < NUMBER_OF_ITERATIONS; i++) {
+            fileObject.seek((i) * NUMBER_OF_ELEMENTS_IN_ITERATION * 8L);
+            sum+=fileObject.read(bytes, 0, NUMBER_OF_ELEMENTS_IN_ITERATION * 8);
+        }
+
+        end = System.nanoTime();
+        timeDelta = (end - start);
+
+        System.out.println ("Batch Read time delta: " + (timeDelta) / 1_000_000 + " ms, " + NUMBER_OF_ELEMENTS_IN_ITERATION * 8L * NUMBER_OF_ITERATIONS / 1024 +
+                " Kb, Speed: " + NUMBER_OF_ELEMENTS_IN_ITERATION * 8L * NUMBER_OF_ITERATIONS / ((timeDelta) / 1000 ) + "Mb/s");
+        System.out.println(sum);
+
+        var r_buffer = ByteBuffer.wrap(bytes).asLongBuffer();
+
+        var val = 0L;
+        for (int j = 0; j < NUMBER_OF_ELEMENTS_IN_ITERATION; j++) {
+            val = r_buffer.get();
+            array[j] = val;
+        }
+
+        fileObject.setLength(0);
+        fileObject.close();
+    }
+
+    // Generate Buckets -> Write on disk -> read from disk
+    static void generateBucketsWriteRead() throws IOException {
+        Random random = new Random();
+        //random.setSeed(0);
+
+        var NUMBER_OF_BUCKETS = 1_000;
+
+        ArrayList<Bucket> buckets = new ArrayList<>();
+
+        for (int i = 0; i < NUMBER_OF_BUCKETS; i++) {
+            Bucket bucket = new Bucket();
+            for (int j = 0; j < Bucket.bucketSize; j++) {
+                bucket.values.add(random.nextLong(100_000 * 5L));
+            }
+
+            buckets.add(bucket);
+        }
+
+        OndiskBucketManager mngr = new OndiskBucketManager("file.bin", 2);
+
+        long timeDelta = 0;
+        long start = 0;
+        long end = 0;
+
+        start = System.nanoTime();
+
+        for (int i = 0; i < buckets.size(); i++) {
+//            start = System.nanoTime();
+            mngr.writeBucketToDisk(buckets.size() - 1 - i, buckets.get(i));
+//            mngr.writeBucketToDisk(i, buckets.get(i));
+            //          end = System.nanoTime();
+            //        timeDelta += (end - start);
+        }
+
+        end = System.nanoTime();
+        timeDelta = (end - start);
+
+        System.out.println("Write time delta: " + (timeDelta) / 1_000_000 + " ms, " + "Just write: " + (mngr.writeTimeDelta) / 1_000_000 + " ms, " + NUMBER_OF_BUCKETS * Bucket.bucketSize * 8 / 1024 +
+                " Kb, Speed: " + NUMBER_OF_BUCKETS * Bucket.bucketSize * 8 / ((timeDelta) / 1000) + "Mb/s");
+
+        try {
+            TimeUnit.MILLISECONDS.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        ArrayList<Bucket> r_buckets = new ArrayList<>();
+
+        timeDelta = 0;
+
+        for (int i = 0; i < NUMBER_OF_BUCKETS; i++) {
+            start = System.nanoTime();
+            var r_bucket = mngr.readBucketFromDisk(NUMBER_OF_BUCKETS - 1 - i);
+//            var r_bucket = mngr.readBucketFromDisk(i);
+            end = System.nanoTime();
+
+            r_buckets.add(r_bucket);
+            timeDelta += (end - start);
+        }
+
+        System.out.println("Read time delta: " + (timeDelta) / 1_000_000 + " ms, " + "Just read: " + (mngr.readTimeDelta) / 1_000_000 + " ms, " + NUMBER_OF_BUCKETS * Bucket.bucketSize * 8 / 1024 +
+                " Kb, Speed: " + NUMBER_OF_BUCKETS * Bucket.bucketSize * 8 / ((timeDelta) / 1000) + "Mb/s");
+
+        for (int i = 0; i < NUMBER_OF_BUCKETS; i++) {
+            Bucket bucket = buckets.get(i);
+            Bucket r_bucket = r_buckets.get(i);
+
+            if (bucket.values.size() != r_bucket.values.size()) {
+                System.out.println("sizes of original and restored buckets " + i + " is different");
+                continue;
+            }
+
+            var bucketArr = bucket.values.toArray();
+            var r_bucketArr = r_bucket.values.toArray();
+
+            for (int j = 0; j < bucketArr.length; j++) {
+                if (bucketArr[j].equals(r_bucketArr[j]) == false) {
+                    System.out.println("values of original and restored buckets " + i + " in position " + j + " are different: " + bucketArr[j] + " and " + r_bucketArr[j]);
                 }
             }
-        }
-    }
 
-    //--------------------------------------------------------------------------------
-    private static void QSortRecImpl(int[] arr, int beginIndex, int endIndex) {
-        if (endIndex - beginIndex >= 2) {
-            var valueToCompareWith = arr[beginIndex];
-
-            var l = beginIndex + 1;
-            var r = endIndex - 1;
-
-            while (l < r) {
-                while ((arr[l] < valueToCompareWith) && (l < endIndex - 1))
-                    l++;
-
-                while ((arr[r] >= valueToCompareWith) && (beginIndex + 1 < r))
-                    r--;
-
-                if(l < r){
-                    var tmp = arr[l];
-                    arr[l] = arr[r];
-                    arr[r] = tmp;
-                }
-            }
-
-            if (arr[beginIndex] > arr[l]) {
-                var tmp = arr[beginIndex];
-                arr[beginIndex] = arr[l];
-                arr[l] = tmp;
-            }
-
-            QSortRecImpl(arr, beginIndex, l);
-            QSortRecImpl(arr, r, endIndex);
-        }
-    }
-
-    public static void QSortRecursive(int[] arr) {
-
-        QSortRecImpl(arr, 0, arr.length);
-    }
-
-    //--------------------------------------------------------------------------------
-    private static int IterPartition(int[] arr, int left, int right) {
-        int pivot = arr[right];
-        int i = left;
-        for (int j = left; j < right; j++) {
-            if (arr[j] <= pivot) {
-                int temp = arr[i];
-                arr[i] = arr[j];
-                arr[j] = temp;
-                i++;
-            }
+            buckets.add(bucket);
         }
 
-        int temp = arr[i];
-        arr[i] = arr[right];
-        arr[right] = temp;
-        return i;
+        mngr.clear();
     }
 
-    public static void QSortIterative(int[] arr) {
+    // Hashtable filling example
+    static void hashtableFillingExample() throws IOException {
+        FractionalHasher hasher = new FractionalHasher();
 
-//        Stack<Integer> stack = new Stack<>();
-        ArrayDeque<Integer> stack = new ArrayDeque<>();
+        InmemoryBucketManager mngr = new InmemoryBucketManager();
+        ExtendibleHashTable hshtbl = new ExtendibleHashTable(mngr, hasher);
 
-        var l = 0;
-        var r = arr.length - 1;
+        hshtbl.insertValue(3);
+        hshtbl.insertValue(13);
+        hshtbl.insertValue(4);
+        hshtbl.insertValue(109);
+        hshtbl.insertValue(32);
+        hshtbl.insertValue(25);
+        hshtbl.insertValue(112);
 
-        stack.push(l);
-        stack.push(r);
+        System.out.println(hshtbl.valueExists(3));
+        System.out.println(hshtbl.valueExists(13));
+        System.out.println(hshtbl.valueExists(4));
+        System.out.println(hshtbl.valueExists(109));
+        System.out.println(hshtbl.valueExists(32));
+        System.out.println(hshtbl.valueExists(25));
+        System.out.println(hshtbl.valueExists(112));
+
+        System.out.println(hshtbl.valueExists(1212));
+        System.out.println(hshtbl.valueExists(1123));
 
 
-        while (!stack.isEmpty()) {
-            r = stack.pop();
-            l = stack.pop();
+        hshtbl.deleteValue(25);
+        hshtbl.deleteValue(109);
+        hshtbl.deleteValue(3);
+        hshtbl.deleteValue(32);
+        hshtbl.deleteValue(3);
+        hshtbl.deleteValue(13);
+        hshtbl.deleteValue(4);
+        hshtbl.deleteValue(112);
 
-            int pivotIndex = IterPartition(arr, l, r);
 
-            if (pivotIndex - 1 > l) {
-                stack.push(l);
-                stack.push(pivotIndex - 1);
-            }
-
-            if (pivotIndex + 1 < r) {
-                stack.push(pivotIndex + 1);
-                stack.push(r);
-            }
-        }
+        System.out.println("counter: " + hshtbl.counterOfMovings);
     }
 
-    //--------------------------------------------------------------------------------
-    private static void MergeSubArrays(int[] arr, int l, int mid, int r) {
-        int[] merged = new int [r - l + 1];
+    // Generate HashTable -> Find Elements -> Delete elements
+    static void generateHashTableFindElementsDeleteElements(int NUMBER_OF_ELEMENTS, IHasher hasher, int maxBucketsInCache) throws IOException {
+        Random random = new Random();
+        random.setSeed(0);
 
-        var mid_copy = mid;
-        var l_copy = l;
+        var MAX_VALUE_FOR_GENERATING = 10_000_000_000L;
+        //var MAX_VALUE_FOR_GENERATING = Long.MAX_VALUE;
+        //var MAX_VALUE_FOR_GENERATING = NUMBER_OF_ELEMENTS * 5L;
 
-        mid++;
+        OndiskBucketManager mngr = new OndiskBucketManager("file.bin", maxBucketsInCache);
+//        InmemoryBucketManager mngr = new InmemoryBucketManager();
 
-        for (int i = 0; i < merged.length; i++) {
+        ExtendibleHashTable2 hshtbl = new ExtendibleHashTable2(mngr, hasher);
 
-            if (l > mid_copy) {
-                merged[i] = arr[mid];
-                mid++;
-            } else if (mid > r) {
-                merged[i] = arr[l];
-                l++;
-            } else if (arr[l] < arr[mid]) {
-                merged[i] = arr[l];
-                l++;
-            } else {
-                merged[i] = arr[mid];
-                mid++;
-            }
+//        ArrayList<Integer> hashes = new ArrayList<>();
 
-        }
+        long numberOfInsertedElements = 0;
 
-        for (int i = 0; i < merged.length; i++) {
-            arr[l_copy + i] = merged[i];
-        }
-    }
+        long start = System.nanoTime();
 
-    private static void MergeSortImpl(int[] arr, int l, int r) {
-        if (l < r){
-            var mid = (l + r) / 2;
-
-            MergeSortImpl(arr, l, mid);
-            MergeSortImpl(arr, mid + 1, r);
-            MergeSubArrays(arr, l, mid, r);
-
-        }
-    }
-
-    public static void MergeSort(int[] arr) {
-        MergeSortImpl(arr, 0, arr.length - 1);
-    }
-    //--------------------------------------------------------------------------------
-
-    public static void main(String[] args) {
-
-        // for measurements
-        var numberOfElements = 100_000;
-
-        int[] array = generateArray(numberOfElements);
-
-        if (numberOfElements <= 100) {
-            for (int j : array) {
-                System.out.print(" " + j);
+        for (var j = 0; j < NUMBER_OF_ELEMENTS; j++) {
+            var val = random.nextLong(MAX_VALUE_FOR_GENERATING);
+//            hashes.add(hasher.generateHash(val));
+            if(hshtbl.insertValue(val)){
+                numberOfInsertedElements++;
             }
         }
 
-        long heapSize = Runtime.getRuntime().totalMemory();
-        long heapMaxSize = Runtime.getRuntime().maxMemory();
-        long heapFreeSize = Runtime.getRuntime().freeMemory();
+        long end = System.nanoTime();
 
-        System.out.println(heapSize);
-        System.out.println(heapMaxSize);
-        System.out.println(heapFreeSize);
+        System.out.println ("Time of insertion: " + (end - start) / 1_000_000 + " ms, " + (hshtbl.maxBucketId + 1) * Bucket.bucketSize * 8 / 1024 +
+                " Kb, Speed from the perspective of elements number: " + ((double) NUMBER_OF_ELEMENTS) / (((double)(end - start)) / 1_000_000 ) + " el/ms");
+        System.out.println ("Speed from the perspective of summary bucket size: " + ((double) hshtbl.maxBucketId + 1) * Bucket.bucketSize * 8 / ((end - start) / 1000 ) + " Mb/s");
+        System.out.println ("Write size: " + ((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings * (Bucket.bucketSize + 1) * 8 / 1024 +
+                " Kb, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings)) * (Bucket.bucketSize + 1) * 8 / ((end - start) / 1000 ) + " Mb/s");
+        System.out.println ("Read size: " + ((OndiskBucketManager)hshtbl.bucketManager).counterOfReadings * (Bucket.bucketSize + 1) * 8 / 1024 +
+                " Kb, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfReadings)) * (Bucket.bucketSize + 1) * 8 / ((end - start) / 1000 ) + " Mb/s");
 
+        System.out.println("numberOfInsertedElements: " + numberOfInsertedElements);
+        System.out.println("size of directories: " + hshtbl.directories.size());
+        System.out.println("counterOfMovings: " + hshtbl.counterOfMovings);
+        System.out.println("maxLocalDepth: " + hshtbl.maxLocalDepth);
+        System.out.println("maxBucketId: " + hshtbl.maxBucketId);
+        System.out.println("average bucket filling: " + (double) numberOfInsertedElements / ((hshtbl.maxBucketId + 1) * Bucket.bucketSize));
+        System.out.println("size of highCollisedValues: " + hshtbl.highCollisedValues.size());
+        System.out.println("mngr.writeTimeDelta: " + mngr.writeTimeDelta / 1000_000 + " ms, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings)) * (Bucket.bucketSize + 1) * 8 / (mngr.writeTimeDelta / 1000) + " Mb/s");
+        System.out.println("mngr.readTimeDelta: " + mngr.readTimeDelta / 1000_000 + " ms, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings)) * (Bucket.bucketSize + 1) * 8 / (mngr.readTimeDelta / 1000) + " Mb/s");
+        System.out.println("mngr.cachePriorityQueueTimeDelta: " + mngr.cachePriorityQueueTimeDelta / 1000_000 + " ms");
+
+        System.out.println ("<============================================>\n");
+
+        random = new Random();
+        random.setSeed(0);
+
+        start = System.nanoTime();
+
+        for (var j = 0; j < NUMBER_OF_ELEMENTS; j++) {
+            var val = random.nextLong(MAX_VALUE_FOR_GENERATING);
+            if (hshtbl.valueExists(val) == false) {
+                System.out.println ("Value " + val + " inserted but not found(");
+            }
+        }
+
+        end = System.nanoTime();
+
+        System.out.println ("Time of finding of all inserted values: " + (end - start) / 1_000_000 + " ms, " + ((double) NUMBER_OF_ELEMENTS) / (((double) (end - start)) / 1_000_000) + " el/ms");
+
+        System.out.println ("\n<============================================>\n");
+
+        random = new Random();
+        random.setSeed(0);
+
+        start = System.nanoTime();
+
+        for (var j = 0; j < NUMBER_OF_ELEMENTS; j++) {
+            var val = random.nextLong(MAX_VALUE_FOR_GENERATING);
+            hshtbl.deleteValue(val);
+        }
+
+        end = System.nanoTime();
+
+        System.out.println ("Time of deleting of all inserted values: " + (end - start) / 1_000_000 + " ms, " + ((double) NUMBER_OF_ELEMENTS) / (((double) (end - start)) / 1_000_000) + " el/ms");
+
+        System.out.println ("\n<============================================>\n");
+
+        random = new Random();
+        random.setSeed(0);
+
+        start = System.nanoTime();
+
+        for (var j = 0; j < NUMBER_OF_ELEMENTS; j++) {
+            var val = random.nextLong(MAX_VALUE_FOR_GENERATING);
+            if (hshtbl.valueExists(val) == true) {
+                System.out.println ("Value " + val + " deleted but found(");
+            }
+        }
+
+        end = System.nanoTime();
+
+        System.out.println ("Time of checking table for emptiness: " + (end - start) / 1_000_000 + " ms, " + ((double) NUMBER_OF_ELEMENTS) / (((double) (end - start)) / 1_000_000) + " el/ms");
+
+        hshtbl.bucketManager.clear();
+
+        /*sort(hashes);
+
+        ArrayList<Integer> bitstat = new ArrayList<>();
+        for (int i = 0; i < 31; i++) {
+            bitstat.add(0);
+        }
+
+        for (int j : hashes) {
+            System.out.println(Integer.toBinaryString(j));
+
+            for (int i = 0; i < 31; i++) {
+                var curval = bitstat.get(i);
+                curval += j % 2;
+                bitstat.set(i, curval);
+
+                j /= 2;
+            }
+        }
+
+        for (int i = 0; i < 31; i++) {
+            System.out.println(i + ": " + ((double) bitstat.get(i) / hashes.size()));
+        }*/
+    }
+
+    // Generate HashTable -> Find Elements -> Delete elements (Directories as array)
+    static void generateHashTableFindElementsDeleteElementsDirArr(int NUMBER_OF_ELEMENTS, IHasher hasher, int maxBucketsInCache) throws IOException {
+        Random random = new Random();
+        random.setSeed(0);
+
+        var MAX_VALUE_FOR_GENERATING = 10_000_000_000L;
+        //var MAX_VALUE_FOR_GENERATING = Long.MAX_VALUE;
+        //var MAX_VALUE_FOR_GENERATING = NUMBER_OF_ELEMENTS * 5L;
+
+        OndiskBucketManager mngr = new OndiskBucketManager("file.bin", maxBucketsInCache);
+//        InmemoryBucketManager mngr = new InmemoryBucketManager();
+
+        ExtendibleHashTable hshtbl = new ExtendibleHashTable(mngr, hasher);
+
+//        ArrayList<Integer> hashes = new ArrayList<>();
+
+        long numberOfInsertedElements = 0;
+
+        long start = System.nanoTime();
+
+        for (var j = 0; j < NUMBER_OF_ELEMENTS; j++) {
+            var val = random.nextLong(MAX_VALUE_FOR_GENERATING);
+//            hashes.add(hasher.generateHash(val));
+            if(hshtbl.insertValue(val)){
+                numberOfInsertedElements++;
+            }
+        }
+
+        long end = System.nanoTime();
+
+        System.out.println ("Time of insertion: " + (end - start) / 1_000_000 + " ms, " + (hshtbl.maxBucketId + 1) * Bucket.bucketSize * 8 / 1024 +
+                " Kb, Speed from the perspective of elements number: " + ((double) NUMBER_OF_ELEMENTS) / (((double)(end - start)) / 1_000_000 ) + " el/ms");
+        System.out.println ("Speed from the perspective of summary bucket size: " + ((double) hshtbl.maxBucketId + 1) * Bucket.bucketSize * 8 / ((end - start) / 1000 ) + " Mb/s");
+        System.out.println ("Write size: " + ((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings * (Bucket.bucketSize + 1) * 8 / 1024 +
+                " Kb, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings)) * (Bucket.bucketSize + 1) * 8 / ((end - start) / 1000 ) + " Mb/s");
+        System.out.println ("Read size: " + ((OndiskBucketManager)hshtbl.bucketManager).counterOfReadings * (Bucket.bucketSize + 1) * 8 / 1024 +
+                " Kb, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfReadings)) * (Bucket.bucketSize + 1) * 8 / ((end - start) / 1000 ) + " Mb/s");
+
+        System.out.println("numberOfInsertedElements: " + numberOfInsertedElements);
+        System.out.println("size of directories: " + hshtbl.directories.size());
+        System.out.println("counterOfMovings: " + hshtbl.counterOfMovings);
+        System.out.println("maxLocalDepth: " + hshtbl.maxLocalDepth);
+        System.out.println("maxBucketId: " + hshtbl.maxBucketId);
+        System.out.println("average bucket filling: " + (double) numberOfInsertedElements / ((hshtbl.maxBucketId + 1) * Bucket.bucketSize));
+        System.out.println("size of highCollisedValues: " + hshtbl.highCollisedValues.size());
+        System.out.println("mngr.writeTimeDelta: " + mngr.writeTimeDelta / 1000_000 + " ms, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings)) * (Bucket.bucketSize + 1) * 8 / (mngr.writeTimeDelta / 1000) + " Mb/s");
+        System.out.println("mngr.readTimeDelta: " + mngr.readTimeDelta / 1000_000 + " ms, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings)) * (Bucket.bucketSize + 1) * 8 / (mngr.readTimeDelta / 1000) + " Mb/s");
+        System.out.println("mngr.cachePriorityQueueTimeDelta: " + mngr.cachePriorityQueueTimeDelta / 1000_000 + " ms");
+
+        System.out.println ("<============================================>\n");
+
+        random = new Random();
+        random.setSeed(0);
+
+        start = System.nanoTime();
+
+        for (var j = 0; j < NUMBER_OF_ELEMENTS; j++) {
+            var val = random.nextLong(MAX_VALUE_FOR_GENERATING);
+            if (hshtbl.valueExists(val) == false) {
+                System.out.println ("Value " + val + " inserted but not found(");
+            }
+        }
+
+        end = System.nanoTime();
+
+        System.out.println ("Time of finding of all inserted values: " + (end - start) / 1_000_000 + " ms, " + ((double) NUMBER_OF_ELEMENTS) / (((double) (end - start)) / 1_000_000) + " el/ms");
+
+        System.out.println ("\n<============================================>\n");
+
+        random = new Random();
+        random.setSeed(0);
+
+        start = System.nanoTime();
+
+        for (var j = 0; j < NUMBER_OF_ELEMENTS; j++) {
+            var val = random.nextLong(MAX_VALUE_FOR_GENERATING);
+            hshtbl.deleteValue(val);
+        }
+
+        end = System.nanoTime();
+
+        System.out.println ("Time of deleting of all inserted values: " + (end - start) / 1_000_000 + " ms, " + ((double) NUMBER_OF_ELEMENTS) / (((double) (end - start)) / 1_000_000) + " el/ms");
+
+        System.out.println ("\n<============================================>\n");
+
+        random = new Random();
+        random.setSeed(0);
+
+        start = System.nanoTime();
+
+        for (var j = 0; j < NUMBER_OF_ELEMENTS; j++) {
+            var val = random.nextLong(MAX_VALUE_FOR_GENERATING);
+            if (hshtbl.valueExists(val) == true) {
+                System.out.println ("Value " + val + " deleted but found(");
+            }
+        }
+
+        end = System.nanoTime();
+
+        System.out.println ("Time of checking table for emptiness: " + (end - start) / 1_000_000 + " ms, " + ((double) NUMBER_OF_ELEMENTS) / (((double) (end - start)) / 1_000_000) + " el/ms");
+
+        hshtbl.bucketManager.clear();
+
+        /*sort(hashes);
+
+        ArrayList<Integer> bitstat = new ArrayList<>();
+        for (int i = 0; i < 31; i++) {
+            bitstat.add(0);
+        }
+
+        for (int j : hashes) {
+            System.out.println(Integer.toBinaryString(j));
+
+            for (int i = 0; i < 31; i++) {
+                var curval = bitstat.get(i);
+                curval += j % 2;
+                bitstat.set(i, curval);
+
+                j /= 2;
+            }
+        }
+
+        for (int i = 0; i < 31; i++) {
+            System.out.println(i + ": " + ((double) bitstat.get(i) / hashes.size()));
+        }*/
+    }
+
+    // Generate HashTable -> Find Elements (shuffled) -> Delete elements (shuffled)
+    static void generateHashTableFindShuffledElementsDeleteShuffledElements(int NUMBER_OF_ELEMENTS, IHasher hasher, int maxBucketsInCache) throws IOException {
+        Random random = new Random();
+        random.setSeed(0);
+
+        var MAX_VALUE_FOR_GENERATING = 10_000_000_000L;
+        //var MAX_VALUE_FOR_GENERATING = Long.MAX_VALUE;
+        //var MAX_VALUE_FOR_GENERATING = NUMBER_OF_ELEMENTS * 5L;
+
+        var NUMBER_OF_ELEMENTS_FOR_ONE_SEED = 100;
+        // NUMBER_OF_ELEMENTS % NUMBER_OF_ELEMENTS_FOR_ONE_SEED should be 0
+
+        OndiskBucketManager mngr = new OndiskBucketManager("file.bin", maxBucketsInCache);
+//        InmemoryBucketManager mngr = new InmemoryBucketManager();
+
+        ExtendibleHashTable2 hshtbl = new ExtendibleHashTable2(mngr, hasher);
+
+        var seeds = LongStream.generate(() -> random.nextLong(Long.MAX_VALUE)).limit((NUMBER_OF_ELEMENTS + NUMBER_OF_ELEMENTS_FOR_ONE_SEED - 1)/ NUMBER_OF_ELEMENTS_FOR_ONE_SEED).toArray();
+
+        long numberOfInsertedElements = 0;
+
+        long start = System.nanoTime();
+
+        for (int i = 0; i < NUMBER_OF_ELEMENTS; i++)
+        {
+            if (i % NUMBER_OF_ELEMENTS_FOR_ONE_SEED == 0) {
+                random.setSeed(seeds[i / NUMBER_OF_ELEMENTS_FOR_ONE_SEED]);
+            }
+
+            var val = random.nextLong(MAX_VALUE_FOR_GENERATING);
+            if(hshtbl.insertValue(val)){
+                numberOfInsertedElements++;
+            }
+        }
+
+        long end = System.nanoTime();
+
+        System.out.println ("Time of insertion: " + (end - start) / 1_000_000 + " ms, " + (hshtbl.maxBucketId + 1) * Bucket.bucketSize * 8 / 1024 +
+                " Kb, Speed from the perspective of elements number: " + ((double) NUMBER_OF_ELEMENTS) / (((double)(end - start)) / 1_000_000 ) + " el/ms");
+        System.out.println ("Speed from the perspective of summary bucket size: " + ((double) hshtbl.maxBucketId + 1) * Bucket.bucketSize * 8 / ((end - start) / 1000 ) + " Mb/s");
+        System.out.println ("Write size: " + ((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings * (Bucket.bucketSize + 1) * 8 / 1024 +
+                " Kb, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings)) * (Bucket.bucketSize + 1) * 8 / ((end - start) / 1000 ) + " Mb/s");
+        System.out.println ("Read size: " + ((OndiskBucketManager)hshtbl.bucketManager).counterOfReadings * (Bucket.bucketSize + 1) * 8 / 1024 +
+                " Kb, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfReadings)) * (Bucket.bucketSize + 1) * 8 / ((end - start) / 1000 ) + " Mb/s");
+
+        System.out.println("numberOfInsertedElements: " + numberOfInsertedElements);
+        System.out.println("size of directories: " + hshtbl.directories.size());
+        System.out.println("counterOfMovings: " + hshtbl.counterOfMovings);
+        System.out.println("maxLocalDepth: " + hshtbl.maxLocalDepth);
+        System.out.println("maxBucketId: " + hshtbl.maxBucketId);
+        System.out.println("average bucket filling: " + (double) numberOfInsertedElements / ((hshtbl.maxBucketId + 1) * Bucket.bucketSize));
+        System.out.println("size of highCollisedValues: " + hshtbl.highCollisedValues.size());
+        System.out.println("mngr.writeTimeDelta: " + mngr.writeTimeDelta / 1000_000 + " ms, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings)) * (Bucket.bucketSize + 1) * 8 / (mngr.writeTimeDelta / 1000) + " Mb/s");
+        System.out.println("mngr.readTimeDelta: " + mngr.readTimeDelta / 1000_000 + " ms, Speed: " + ((double) (((OndiskBucketManager)hshtbl.bucketManager).counterOfWritings)) * (Bucket.bucketSize + 1) * 8 / (mngr.readTimeDelta / 1000) + " Mb/s");
+        System.out.println("mngr.cachePriorityQueueTimeDelta: " + mngr.cachePriorityQueueTimeDelta / 1000_000 + " ms");
+
+        System.out.println ("<============================================>\n");
+
+        random.setSeed(0);
+
+        shuffleArray(seeds, 4);
+
+        start = System.nanoTime();
+
+        long[] valuesForCurrentSeed = new long[NUMBER_OF_ELEMENTS_FOR_ONE_SEED];
+        int indexCounter = 0;
+        for (int i = 0; i < NUMBER_OF_ELEMENTS; i++)
+        {
+            if (i % NUMBER_OF_ELEMENTS_FOR_ONE_SEED == 0) {
+                random.setSeed(seeds[i / NUMBER_OF_ELEMENTS_FOR_ONE_SEED]);
+                valuesForCurrentSeed = LongStream.generate(() -> random.nextLong(MAX_VALUE_FOR_GENERATING)).limit(NUMBER_OF_ELEMENTS_FOR_ONE_SEED).toArray();
+                shuffleArray(valuesForCurrentSeed, i);
+                indexCounter = 0;
+            }
+
+            var val = valuesForCurrentSeed[indexCounter++];
+            if (hshtbl.valueExists(val) == false) {
+                System.out.println ("Value " + val + " inserted but not found(");
+            }
+        }
+
+        end = System.nanoTime();
+
+        System.out.println ("Time of finding of all inserted values: " + (end - start) / 1_000_000 + " ms, " + ((double) NUMBER_OF_ELEMENTS) / (((double) (end - start)) / 1_000_000) + " el/ms");
+        System.out.println ("\n<============================================>\n");
+
+        random.setSeed(0);
+
+        start = System.nanoTime();
+
+        for (int i = 0; i < NUMBER_OF_ELEMENTS; i++)
+        {
+            if (i % NUMBER_OF_ELEMENTS_FOR_ONE_SEED == 0) {
+                random.setSeed(seeds[i / NUMBER_OF_ELEMENTS_FOR_ONE_SEED]);
+                valuesForCurrentSeed = LongStream.generate(() -> random.nextLong(MAX_VALUE_FOR_GENERATING)).limit(NUMBER_OF_ELEMENTS_FOR_ONE_SEED).toArray();
+                shuffleArray(valuesForCurrentSeed, i);
+                indexCounter = 0;
+            }
+
+            var val = valuesForCurrentSeed[indexCounter++];
+            hshtbl.deleteValue(val);
+        }
+        System.out.println();
+
+        end = System.nanoTime();
+
+        System.out.println ("Time of deleting of all inserted values: " + (end - start) / 1_000_000 + " ms, " + ((double) NUMBER_OF_ELEMENTS) / (((double) (end - start)) / 1_000_000) + " el/ms");
+        System.out.println ("\n<============================================>\n");
+
+        random.setSeed(0);
+
+        start = System.nanoTime();
+
+        for (int i = 0; i < NUMBER_OF_ELEMENTS; i++)
+        {
+            if (i % NUMBER_OF_ELEMENTS_FOR_ONE_SEED == 0) {
+                random.setSeed(seeds[i / NUMBER_OF_ELEMENTS_FOR_ONE_SEED]);
+                valuesForCurrentSeed = LongStream.generate(() -> random.nextLong(MAX_VALUE_FOR_GENERATING)).limit(NUMBER_OF_ELEMENTS_FOR_ONE_SEED).toArray();
+                shuffleArray(valuesForCurrentSeed, i);
+                indexCounter = 0;
+            }
+
+            var val = valuesForCurrentSeed[indexCounter++];
+            if (hshtbl.valueExists(val) == true) {
+                System.out.println ("Value " + val + " deleted but found(");
+            }
+        }
+        System.out.println();
+
+        end = System.nanoTime();
+
+        System.out.println ("Time of checking table for emptiness: " + (end - start) / 1_000_000 + " ms, " + ((double) NUMBER_OF_ELEMENTS) / (((double) (end - start)) / 1_000_000) + " el/ms");
+
+        hshtbl.bucketManager.clear();
+    }
+
+    // Demonstrate hash collisions
+    static void demonstrateHashCollisions() {
+        FractionalHasher hasher = new FractionalHasher();
+
+        System.out.println(hasher.generateHash(11L));
+        System.out.println(hasher.generateHash(100011L));
+    }
+
+    // Check hashes unique
+    static void checkHashesUnique() {
+        Random random = new Random();
+        random.setSeed(0);
+
+        var NUMBER_OF_ELEMENTS = 20_000_000;
+        var MAX_VALUE_FOR_GENERATING = 10_000_000_000L;
+        //var MAX_VALUE_FOR_GENERATING = Long.MAX_VALUE;
+        //var MAX_VALUE_FOR_GENERATING = NUMBER_OF_ELEMENTS * 5L;
+
+        //FractionalHasher hasher = new FractionalHasher();
+        UniversalHasher hasher = new UniversalHasher();
+        //GuavaHasher hasher = new GuavaHasher();
+        HashSet<Integer> hashes = new HashSet<>();
+
+
+        for (var j = 0; j < NUMBER_OF_ELEMENTS; j++) {
+            var val = random.nextLong(MAX_VALUE_FOR_GENERATING);
+
+//            System.out.println(val);
+            hashes.add(hasher.generateHash(val));
+        }
+
+        System.out.println("size of hashes: " + hashes.size() + ", unique_koef: " + (double) hashes.size() / NUMBER_OF_ELEMENTS);
+    }
+    // ------------------------------------------------------
+
+    public static void main(String[] args) throws IOException {
+
+        // For async profiler
+        /*
         long pid = ProcessHandle.current().pid();
         System.out.println("pid: ");
         System.out.println(pid);
@@ -193,54 +733,138 @@ public class Main {
             TimeUnit.MILLISECONDS.sleep(10_000);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
-        }
+        }*/
 
-        long start = System.nanoTime();
+        // Heap info
+        /*long heapSize = Runtime.getRuntime().totalMemory();
+        long heapMaxSize = Runtime.getRuntime().maxMemory();
+        long heapFreeSize = Runtime.getRuntime().freeMemory();
+        System.out.println("heapSize: " + heapSize);
+        System.out.println("heapMaxSize: " + heapMaxSize);
+        System.out.println("heapFreeSize: " + heapFreeSize);*/
 
-        Main.MergeSort(array);
+        //generateShuffleOfRandomSequence();
+        //generateBucketsWriteRead();
+        //diskWriteReadOfNumbers();
+        //hashtableFillingExample();
+        //checkHashesUnique();
 
-        long end = System.nanoTime();
+        //RandGen
+        /*Bucket.bucketSize = (512 - 1 * 8) / 8;
 
-        System.out.println ("1 Time Difference: " + (end - start) / 1_000_000);
+        UniversalHasher hasher = new UniversalHasher();
 
-
-        //--------------------------------
-        /*
-        start = System.nanoTime();
-
-//        sort(array2);
-//        Main.bubbleSort(array2);
-        Main.QSortIterative(array2);
-
-        end = System.nanoTime();
-
-        System.out.println ("2 Time Difference: " + (end - start) / 1_000_000);
-
-
-        //--------------------------------
-        start = System.nanoTime();
-
-        Main.MergeSort(array3);
-
-        end = System.nanoTime();
-
-        System.out.println ("3 Time Difference: " + (end - start) / 1_000_000);
-
-
-        for (int i = 0; i < numberOfElements; i++) {
-            if ((array[i] != array2[i]) || (array2[i] != array3[i]))
-                System.out.println ("Not equal: " + array[i] + " " + array2[i] + " " + array3[i]);
-        }
-
-
-        if (numberOfElements <= 100) {
-            System.out.println("\n\nSorted:");
-
-            for (int j : array) {
-                System.out.print(" " + j);
-            }
+        for (int i = 0; i < 10; i++) {
+            System.out.println("iteration: " + i);
+            System.out.println("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+            generateHashTableFindElementsDeleteElements(1_000_000, hasher, 2);
+            System.out.println("\n===============================================================\n");
+            generateHashTableFindShuffledElementsDeleteShuffledElements(1_000_000, hasher, 2);
+            System.out.println("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
         }*/
 
 
+        // Hashers
+        /*Bucket.bucketSize = (512 - 1 * 8) / 8;
+
+        for (int i = 0; i < 5; i++) {
+            System.out.println("iteration: " + i);
+            System.out.println("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\nFractionalHasher\n");
+            IHasher hasher = new FractionalHasher();
+            //((FractionalHasher)hasher).A = 0.066667;
+            generateHashTableFindElementsDeleteElements(1_000_000, hasher, 2);
+            System.out.println("\n===============================================================\nGuavaHasher\n");
+            hasher = new GuavaHasher();
+            generateHashTableFindElementsDeleteElements(1_000, hasher, 2);
+            System.out.println("\n===============================================================\nUniversalHasher\n");
+            hasher = new UniversalHasher();
+            generateHashTableFindElementsDeleteElements(1_000, hasher, 2);
+            System.out.println("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+        }*/
+
+        // Cache
+        /*UniversalHasher hasher = new UniversalHasher();
+
+        Bucket.bucketSize = (512 - 1 * 8) / 8;
+
+
+        for (int i = 0; i < 5; i++) {
+            for (int j = 2; j <= 2000; j *= 10) {
+                System.out.println("iteration: " + i + ", cache capacity: " + j);
+                System.out.println("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+                generateHashTableFindElementsDeleteElements(1_000_000, hasher, j);
+                System.out.println("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+
+
+            }
+        }*/
+
+        //  Directoriies
+
+        Bucket.bucketSize = (512 - 1 * 8) / 8;
+
+            IHasher hasher = new UniversalHasher();
+
+            System.out.println("Map_Universal");
+            System.out.println("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+            generateHashTableFindElementsDeleteElements(100_000, hasher, 2);
+            System.out.println("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+
+            System.out.println("Array_Universal");
+            System.out.println("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+            generateHashTableFindElementsDeleteElementsDirArr(100_000, hasher, 2);
+            System.out.println("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+
+            hasher = new FractionalHasher();
+            ((FractionalHasher)hasher).A = 0.066667;
+
+            System.out.println("Map_Fractional");
+            System.out.println("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+            generateHashTableFindElementsDeleteElements(100_000, hasher, 2);
+            System.out.println("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+
+            System.out.println("Array_Fractional");
+            System.out.println("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+            generateHashTableFindElementsDeleteElementsDirArr(100_000, hasher, 2);
+            System.out.println("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+
+
+
+        /*UniversalHasher hasher = new UniversalHasher();
+
+        for (int numberOfValues = 8_388_608; numberOfValues <= 8_388_608; numberOfValues *= 4) {
+            for (int bucketSizeInBytes = 32; bucketSizeInBytes <= 4096 * 4; bucketSizeInBytes *= 2) {
+
+                Bucket.bucketSize = (bucketSizeInBytes - 1 * 8) / 8;
+
+                for (int i = 0; i < 5; i++) {
+                    System.out.println("bucketSizeInBytes: " + bucketSizeInBytes + ", numberOfValues: " + numberOfValues + ", iteration: " + i);
+                    System.out.println("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+                    generateHashTableFindElementsDeleteElements(numberOfValues, hasher, 2);
+                    System.out.println("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+
+                    try {
+                        TimeUnit.MILLISECONDS.sleep(10_000);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        }*/
+
+        /*UniversalHasher hasher = new UniversalHasher();
+        int numberOfValues = Integer.parseInt(args[0]);
+        int bucketSizeInBytes = Integer.parseInt(args[1]);
+        int iteration = Integer.parseInt(args[2]);
+
+        Bucket.bucketSize = (bucketSizeInBytes - 1 * 8) / 8;
+
+        System.out.println("bucketSizeInBytes: " + bucketSizeInBytes + ", numberOfValues: " + numberOfValues + ", iteration: " + iteration);
+        System.out.println("\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+        generateHashTableFindElementsDeleteElements(numberOfValues, hasher, 2);
+        System.out.println("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");*/
+
+        //generateHashTableFindElementsDeleteElements(1_00_000);
+        //generateHashTableFindShuffledElementsDeleteShuffledElements(1_00_000);
     }
 }

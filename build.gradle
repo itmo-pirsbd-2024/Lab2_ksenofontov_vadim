@@ -1,6 +1,5 @@
 plugins {
     id 'java'
-    id "me.champeau.jmh" version "0.7.2"
 }
 
 group = 'org.example'
@@ -17,8 +16,4 @@ dependencies {
 
 test {
     useJUnitPlatform()
-}
-
-jmh {
-//    jvmArgs=['-Xss100m -Xmx3g']
 }
